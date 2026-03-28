@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Income Tracker Pro+</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+    background: radial-gradient(circle at top, #1a1f3a, #0a0d1a);
+    color: white;
+    font-family: -apple-system;
+    padding: 15px;
+}
+
+h1 { text-align: center; }
+
+.total {
+    font-size: 36px;
+    text-align: center;
+    color: #00ffa6;
+}
+
+.stats, .goal {
+    margin-top: 15px;
+    padding: 10px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.05);
+}
+
+.row {
+    display: flex;
+    justify-content: space-between;
+    margin: 8px 0;
+    padding: 10px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 10px;
+}
+
+input {
+    width: 70px;
+    background: #111428;
+    border: none;
+    color: white;
+    border-radius: 6px;
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 10px;
+    background: linear-gradient(45deg,#6a5cff,#00ffa6);
+    border: none;
+    border-radius: 10px;
+    color: white;
+}
+.progress {
+    height: 10px;
+    background: #222;
+    border-radius: 10px;
+    overflow: hidden;
+}
+.progress-bar {
+    height: 100%;
+    background: #00ffa6;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Income Tracker</h1>
+
+<div class="total" id="total">$0.00</div>
+
+<div id="app"></div>
+
+<button onclick="save()">ЗБЕРЕГТИ</button>
+
+<div class="stats">
+    <div>Тиждень: <span id="week">$0</span></div>
+    <div>Місяць: <span id="month">$0</span></div>
+    <div>Рік: <span id="year">$0</span></div>
+</div>
+
+<div class="goal">
+    <input type="number" id="goalInput" placeholder="Ціль $">
+    <button onclick="setGoal()">Задати ціль</button>
+    <div class="progress">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div id="goalText"></div>
+</div>
+
+<canvas id="chart"></canvas>
+
+<script>
+const sites = ["Chaturbate","Stripchat","BongaCams","Streamate","Loyalfans"];
+const rates = {
+"Chaturbate":0.05,
+"Stripchat":0.05,
+"BongaCams":1,
+"Streamate":1,
+"Loyalfans":1
+};
+
+const app = document.getElementById("app");
+
+sites.forEach(site=>{
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `
+        <span>${site}</span>
+        <input type="number" oninput="calc()">
+        <span class="usd">$0.00</span>
+    `;
+    app.appendChild(row);
+});
+
+function calc(){
+    let total = 0;
+    document.querySelectorAll(".row").forEach(row=>{
+        const site = row.children[0].innerText;
+        const val = parseFloat(row.children[1].value)||0;
+        const usd = val * rates[site];
+        row.children[2].innerText = "$"+usd.toFixed(2);
+        total += usd;
+    });
+    document.getElementById("total").innerText = "$"+total.toFixed(2);
+}
+
+function save(){
+    const data = JSON.parse(localStorage.getItem("data")||"{}");
+    const today = new Date().toISOString().split("T")[0];
+
+    data[today] = {};
+    document.querySelectorAll(".row").forEach(row=>{
+        const site = row.children[0].innerText;
+        data[today][site] = row.children[1].value||0;
+    });
+
+    localStorage.setItem("data", JSON.stringify(data));
+    calcStats();
+    renderChart();
+}
+
+function calcStats(){
+    const data = JSON.parse(localStorage.getItem("data")||"{}");
+    let week=0, month=0, year=0;
+
+    const now = new Date();
+
+    Object.keys(data).forEach(date=>{
+        const d = new Date(date);
+        let total = 0;
+
+        for(let site in data[date]){
+            total += data[date][site]*(rates[site]||1);
+        }
+
+        if ((now - d) <= 7*24*60*60*1000) week += total;
+        if (d.getMonth() === now.getMonth()) month += total;
+        if (d.getFullYear() === now.getFullYear()) year += total;
+    });
+
+    document.getElementById("week").innerText="$"+week.toFixed(2);
+    document.getElementById("month").innerText="$"+month.toFixed(2);
+    document.getElementById("year").innerText="$"+year.toFixed(2);
+
+    updateGoal(month);
+}
+
+function setGoal(){
+    const goal = document.getElementById("goalInput").value;
+    localStorage.setItem("goal", goal);
+    calcStats();
+}
+
+function updateGoal(current){
+    const goal = localStorage.getItem("goal")||0;
+    const percent = goal ? (current/goal)*100 : 0;
+
+    document.getElementById("progressBar").style.width = percent+"%";
+    document.getElementById("goalText").innerText = `$${current.toFixed(0)} / $${goal}`;
+}
+
+function renderChart(){
+    const data = JSON.parse(localStorage.getItem("data")||"{}");
+    const labels=[], values=[];
+
+    Object.keys(data).forEach(date=>{
+        let total=0;
+        for(let site in data[date]){
+            total += data[date][site]*(rates[site]||1);
+        }
+        labels.push(date);
+        values.push(total);
+    });
+
+    new Chart(document.getElementById("chart"), {
+        type:"line",
+        data:{labels:labels,datasets:[{data:values,borderColor:"#00ffa6"}]}
+    });
+}
+
+calcStats();
+renderChart();
+</script>
+
+</body>
+</html>
